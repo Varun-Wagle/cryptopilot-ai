@@ -1,0 +1,41 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: cryptopilot-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-cryptopilot}
+      POSTGRES_USER: ${POSTGRES_USER:-cryptopilot}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    volumes:
+      - cryptopilot_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-cryptopilot} -d ${POSTGRES_DB:-cryptopilot}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks: [cryptopilot-internal]
+
+  api:
+    build: .
+    container_name: cryptopilot-api
+    restart: unless-stopped
+    env_file: [.env]
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks: [cryptopilot-internal]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  cryptopilot_pgdata:
+
+networks:
+  cryptopilot-internal:
+    driver: bridge
